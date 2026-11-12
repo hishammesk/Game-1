@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dino Star Jump!</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+      overflow: hidden;
+    }
+    h1 {
+      color: #2E7D32;
+      font-size: 2.2rem;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 0px #FFF;
+    }
+    #game-container {
+      position: relative;
+      border: 6px solid #4CAF50;
+      border-radius: 20px;
+      background: #FFFDF7;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+    }
+    #ui-bar {
+      position: absolute;
+      top: 15px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #FF6F00;
+      pointer-events: none;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+    #overlay h2 {
+      font-size: 2rem;
+      color: #2E7D32;
+      margin-bottom: 10px;
+    }
+    #overlay p {
+      font-size: 1.2rem;
+      color: #555;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #FF9800;
+      color: white;
+      border: none;
+      padding: 15px 35px;
+      font-size: 1.5rem;
+      font-family: inherit;
+      font-weight: bold;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #E65100;
+      transition: transform 0.1s;
+    }
+    button:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #E65100;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🦖 Dino Star Jump! ⭐</h1>
+
+  <div id="game-container">
+    <div id="ui-bar">
+      <span>⭐ Stars: <span id="score">0</span></span>
+      <span>🏆 Best: <span id="best">0</span></span>
+    </div>
+    <canvas id="gameCanvas" width="700" height="350"></canvas>
+    <div id="overlay">
+      <h2 id="msg-title">Ready to Jump?</h2>
+      <p id="msg-sub">Press SPACE, UP Arrow, or TAP the screen to jump over rocks and catch stars!</p>
+      <button id="start-btn">PLAY!</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const overlay = document.getElementById('overlay');
+    const msgTitle = document.getElementById('msg-title');
+    const msgSub = document.getElementById('msg-sub');
+    const startBtn = document.getElementById('start-btn');
+
+    let score = 0;
+    let bestScore = localStorage.getItem('dinoBest') || 0;
+    bestEl.textContent = bestScore;
+
+    let gameRunning = false;
+    let animationId;
+    let speed = 5;
+    let frameCount = 0;
+
+    // Player (Dino)
+    const dino = {
+      x: 70,
+      y: 250,
+      size: 48,
+      vy: 0,
+      gravity: 0.65,
+      jumpPower: -13.5,
+      grounded: true
+    };
+
+    let obstacles = [];
+    let stars = [];
+
+    function jump() {
+      if (gameRunning && dino.grounded) {
+        dino.vy = dino.jumpPower;
+        dino.grounded = false;
+      }
+    }
+
+    // Controls: Keyboard, Mouse, and Touch
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (!gameRunning) startGame();
+        else jump();
+      }
+    });
+    canvas.addEventListener('pointerdown', jump);
+    startBtn.addEventListener('click', startGame);
+
+    function startGame() {
+      score = 0;
+      speed = 4.5;
+      frameCount = 0;
+      obstacles = [];
+      stars = [];
+      dino.y = 250;
+      dino.vy = 0;
+      dino.grounded = true;
+      scoreEl.textContent = score;
+      overlay.style.display = 'none';
+      gameRunning = true;
+      loop();
+    }
+
+    function gameOver() {
+      gameRunning = false;
+      cancelAnimationFrame(animationId);
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('dinoBest', bestScore);
+        bestEl.textContent = bestScore;
+      }
+      msgTitle.textContent = "Oops! Bonk! 🪨";
+      msgSub.textContent = `You collected ${score} stars! Want to try again?`;
+      startBtn.textContent = "PLAY AGAIN!";
+      overlay.style.display = 'flex';
+    }
+
+    function update() {
+      frameCount++;
+
+      // Slowly increase speed (kept gentle for a 7-year-old)
+      if (frameCount % 600 === 0 && speed < 8.5) {
+        speed += 0.3;
+      }
+
+      // Dino physics
+      dino.vy += dino.gravity;
+      dino.y += dino.vy;
+      if (dino.y >= 250) {
+        dino.y = 250;
+        dino.vy = 0;
+        dino.grounded = true;
+      }
+
+      // Spawn Rocks
+      if (frameCount % 110 === 0) {
+        obstacles.push({ x: canvas.width + 20, y: 262, size: 36 });
+      }
+
+      // Spawn Stars
+      if (frameCount % 75 === 0) {
+        const starHeight = Math.random() > 0.5 ? 160 : 230;
+        stars.push({ x: canvas.width + 20, y: starHeight, size: 32 });
+      }
+
+      // Move & Check Rocks
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        let obs = obstacles[i];
+        obs.x -= speed;
+
+        // Forgiving hitbox for kids
+        if (
+          dino.x + 12 < obs.x + obs.size - 8 &&
+          dino.x + dino.size - 12 > obs.x + 8 &&
+          dino.y + 12 < obs.y + obs.size - 6 &&
+          dino.y + dino.size - 8 > obs.y + 8
+        ) {
+          gameOver();
+          return;
+        }
+
+        if (obs.x + obs.size < 0) obstacles.splice(i, 1);
+      }
+
+      // Move & Collect Stars
+      for (let i = stars.length - 1; i >= 0; i--) {
+        let st = stars[i];
+        st.x -= speed;
+
+        if (
+          dino.x < st.x + st.size &&
+          dino.x + dino.size > st.x &&
+          dino.y < st.y + st.size &&
+          dino.y + dino.size > st.y
+        ) {
+          score++;
+          scoreEl.textContent = score;
+          stars.splice(i, 1);
+          continue;
+        }
+
+        if (st.x + st.size < 0) stars.splice(i, 1);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Grass Ground
+      ctx.fillStyle = '#8BC34A';
+      ctx.fillRect(0, 295, canvas.width, 55);
+      ctx.fillStyle = '#689F38';
+      ctx.fillRect(0, 295, canvas.width, 8);
+
+      // Draw Clouds
+      ctx.font = '40px serif';
+      ctx.fillText('☁️', (600 - (frameCount * 0.5) % 700), 70);
+      ctx.fillText('☁️', (250 - (frameCount * 0.3) % 700), 110);
+
+      // Draw Dino (Flipped to face right)
+      ctx.save();
+      ctx.translate(dino.x + dino.size / 2, dino.y + dino.size / 2);
+      ctx.scale(-1, 1);
+      ctx.font = `${dino.size}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🦖', 0, 0);
+      ctx.restore();
+
+      // Draw Rocks
+      ctx.font = '36px serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      obstacles.forEach(obs => ctx.fillText('🪨', obs.x, obs.y));
+
+      // Draw Stars
+      ctx.font = '32px serif';
+      stars.forEach(st => ctx.fillText('⭐', st.x, st.y));
+    }
+
+    function loop() {
+      if (!gameRunning) return;
+      update();
+      draw();
+      animationId = requestAnimationFrame(loop);
+    }
+
+    // Initial screen draw
+    draw();
+  </script>
+</body>
+</html>
